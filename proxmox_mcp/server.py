@@ -10,6 +10,9 @@ Configuration (environment variables):
     PROXMOX_TOKEN_VALUE API token value (required if no password)
     PROXMOX_PASSWORD    Password (alternative to token auth)
     PROXMOX_VERIFY_SSL  Verify SSL certs (default: false)
+
+Guest SSH operations are disabled by default. See .env.example and
+LAB_GUEST_OPS.md before enabling them.
 """
 
 from __future__ import annotations
@@ -24,14 +27,18 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 import mcp.server.stdio
 
-from .client import ProxmoxClient, _validate_config
-from .tools import (
+# Load .env before importing modules which read feature flags at import time.
+load_dotenv()
+
+from .client import ProxmoxClient, _validate_config  # noqa: E402
+from .tools import (  # noqa: E402
     acme,
     access,
     ceph,
     cluster,
     disks,
     firewall,
+    guest,
     lxc,
     nodes,
     notifications,
@@ -40,8 +47,6 @@ from .tools import (
     sdn,
     storage,
 )
-
-load_dotenv()
 
 # --- Build unified tool registry ---
 
@@ -59,6 +64,7 @@ MODULES = [
     sdn,
     notifications,
     pools,
+    guest,
 ]
 
 ALL_TOOLS: list[Tool] = []
