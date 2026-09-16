@@ -31,6 +31,7 @@ import mcp.server.stdio
 load_dotenv()
 
 from .client import ProxmoxClient, _validate_config  # noqa: E402
+from .safety import augment_schema, enforce  # noqa: E402
 from .tools import (  # noqa: E402
     acme,
     access,
@@ -72,13 +73,14 @@ TOOL_MODULE: dict[str, Any] = {}
 
 for mod in MODULES:
     for tool_def in mod.TOOLS:
+        name = tool_def["name"]
         t = Tool(
-            name=tool_def["name"],
+            name=name,
             description=tool_def["description"],
-            inputSchema=tool_def["inputSchema"],
+            inputSchema=augment_schema(name, tool_def["inputSchema"]),
         )
         ALL_TOOLS.append(t)
-        TOOL_MODULE[tool_def["name"]] = mod
+        TOOL_MODULE[name] = mod
 
 # --- MCP server setup ---
 
@@ -97,7 +99,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         mod = TOOL_MODULE.get(name)
         if mod is None:
             raise ValueError(f"Unknown tool: {name}")
-        result = await mod.handle(name, arguments or {}, proxmox)
+        safe_arguments = enforce(name, dict(arguments or {}))
+        result = await mod.handle(name, safe_arguments, proxmox)
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
         error = {"error": str(e), "tool": name}
