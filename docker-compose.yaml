@@ -11,13 +11,18 @@ services:
     stdin_open: true
     tty: true
 
+    # Required only when MCP_TRANSPORT=streamable-http.
+    # The LXC host firewall should restrict TCP/8000 to the reverse-proxy/tunnel host.
+    ports:
+      - "8000:8000"
+
     # Enable this read-only mount only when guest SSH operations are used.
     # Create ./ssh/id_ed25519 and ./ssh/known_hosts first and restrict permissions.
     # volumes:
     #   - ./ssh:/run/proxmox-mcp-ssh:ro
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import proxmox_mcp, asyncssh, httpx; print('ok')"]
+      test: ["CMD", "python", "-c", "import proxmox_mcp, asyncssh, httpx, starlette, uvicorn; print('ok')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,4 +35,4 @@ services:
 
     labels:
       - "com.yansyrod.mcp-server=proxmox"
-      - "com.yansyrod.version=2.1.0"
+      - "com.yansyrod.version=2.2.0"
