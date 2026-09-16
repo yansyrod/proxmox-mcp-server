@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -15,6 +16,22 @@ PROXMOX_TOKEN_NAME = os.getenv("PROXMOX_TOKEN_NAME", "")
 PROXMOX_TOKEN_VALUE = os.getenv("PROXMOX_TOKEN_VALUE", "")
 PROXMOX_PASSWORD = os.getenv("PROXMOX_PASSWORD", "")
 PROXMOX_VERIFY_SSL = os.getenv("PROXMOX_VERIFY_SSL", "false").lower() == "true"
+PROXMOX_TIMEOUT = float(os.getenv("PROXMOX_TIMEOUT", "30"))
+
+
+def _endpoint() -> str:
+    """Accept either a bare host or a full https://host:port value."""
+    raw = PROXMOX_HOST.strip()
+    if not raw:
+        return ""
+    if "://" in raw:
+        parsed = urlparse(raw)
+        host = parsed.hostname or ""
+        port = parsed.port or int(PROXMOX_PORT)
+        scheme = parsed.scheme or "https"
+        return f"{scheme}://{host}:{port}/api2/json"
+    host = raw.rstrip("/")
+    return f"https://{host}:{PROXMOX_PORT}/api2/json"
 
 
 def _validate_config() -> None:
@@ -33,8 +50,8 @@ def _validate_config() -> None:
 
 class ProxmoxClient:
     def __init__(self) -> None:
-        self.base_url = f"https://{PROXMOX_HOST}:{PROXMOX_PORT}/api2/json"
-        self.client = httpx.AsyncClient(verify=PROXMOX_VERIFY_SSL, timeout=30.0)
+        self.base_url = _endpoint()
+        self.client = httpx.AsyncClient(verify=PROXMOX_VERIFY_SSL, timeout=PROXMOX_TIMEOUT)
         self.ticket: Optional[str] = None
         self.csrf_token: Optional[str] = None
         self.token: Optional[str] = None
