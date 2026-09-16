@@ -1,30 +1,33 @@
-version: '3.8'
-
 services:
   proxmox-mcp-server:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/ry-ops/proxmox-mcp-server:latest
+    image: yansyrod/proxmox-mcp-server:local
     container_name: proxmox-mcp-server
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - PROXMOX_HOST=${PROXMOX_HOST:-https://10.88.140.151:8006}
-      - PROXMOX_TOKEN_ID=${PROXMOX_TOKEN_ID}
-      - PROXMOX_TOKEN_SECRET=${PROXMOX_TOKEN_SECRET}
-      - PROXMOX_VERIFY_SSL=${PROXMOX_VERIFY_SSL:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    # MCP servers communicate via stdio, not network ports
     stdin_open: true
     tty: true
+
+    # Enable this read-only mount only when guest SSH operations are used.
+    # Create ./ssh/id_ed25519 and ./ssh/known_hosts first and restrict permissions.
+    # volumes:
+    #   - ./ssh:/run/proxmox-mcp-ssh:ro
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-c", "import proxmox_mcp, asyncssh, httpx; print('ok')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
     labels:
-      - "com.cortex.mcp-server=proxmox"
-      - "com.cortex.version=1.0.0"
+      - "com.yansyrod.mcp-server=proxmox"
+      - "com.yansyrod.version=2.1.0"

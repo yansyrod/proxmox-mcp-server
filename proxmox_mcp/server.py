@@ -10,6 +10,9 @@ Configuration (environment variables):
     PROXMOX_TOKEN_VALUE API token value (required if no password)
     PROXMOX_PASSWORD    Password (alternative to token auth)
     PROXMOX_VERIFY_SSL  Verify SSL certs (default: false)
+
+Guest SSH operations are disabled by default. See .env.example and
+LAB_GUEST_OPS.md before enabling them.
 """
 
 from __future__ import annotations
@@ -24,14 +27,19 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 import mcp.server.stdio
 
-from .client import ProxmoxClient, _validate_config
-from .tools import (
+# Load .env before importing modules which read feature flags at import time.
+load_dotenv()
+
+from .client import ProxmoxClient, _validate_config  # noqa: E402
+from .safety import augment_schema, enforce  # noqa: E402
+from .tools import (  # noqa: E402
     acme,
     access,
     ceph,
     cluster,
     disks,
     firewall,
+    guest,
     lxc,
     nodes,
     notifications,
@@ -40,8 +48,6 @@ from .tools import (
     sdn,
     storage,
 )
-
-load_dotenv()
 
 # --- Build unified tool registry ---
 
@@ -59,6 +65,7 @@ MODULES = [
     sdn,
     notifications,
     pools,
+    guest,
 ]
 
 ALL_TOOLS: list[Tool] = []
@@ -66,13 +73,14 @@ TOOL_MODULE: dict[str, Any] = {}
 
 for mod in MODULES:
     for tool_def in mod.TOOLS:
+        name = tool_def["name"]
         t = Tool(
-            name=tool_def["name"],
+            name=name,
             description=tool_def["description"],
-            inputSchema=tool_def["inputSchema"],
+            inputSchema=augment_schema(name, tool_def["inputSchema"]),
         )
         ALL_TOOLS.append(t)
-        TOOL_MODULE[tool_def["name"]] = mod
+        TOOL_MODULE[name] = mod
 
 # --- MCP server setup ---
 
@@ -91,7 +99,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         mod = TOOL_MODULE.get(name)
         if mod is None:
             raise ValueError(f"Unknown tool: {name}")
-        result = await mod.handle(name, arguments or {}, proxmox)
+        safe_arguments = enforce(name, dict(arguments or {}))
+        result = await mod.handle(name, safe_arguments, proxmox)
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
         error = {"error": str(e), "tool": name}
